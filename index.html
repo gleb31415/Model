@@ -1,59 +1,63 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Metallic Model — Fullscreen</title>
+  <title>Model — Cursor Follow</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      width: 100%;
-      background: #ffffff; /* обычный белый фон страницы */
+      margin: 0; padding: 0;
+      height: 100%; width: 100%;
+      background: #ffffff; /* plain page background */
     }
     model-viewer {
       width: 100%;
       height: 100%;
       display: block;
-      background: transparent; /* без подложек/эффектов */
-      touch-action: none;       /* чтобы тач не скроллил страницу при повороте */
+      background: transparent;  /* no skybox/backdrop */
+      touch-action: none;       /* avoid page scroll on touch move */
     }
   </style>
 </head>
 <body>
   <model-viewer id="mv"
     src="./models/solution-logo.glb"
-    camera-controls="false"
+    camera-controls="false"   <!-- no grab/drag -->
     disable-zoom
-    interaction-policy="none">
+    interaction-policy="none"
+    environment-image="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr"
+    environment-intensity="0.9"  <!-- a bit softer lighting -->
+    exposure="1.0"
+    tone-mapping="aces"
+    shadow-intensity="0.25"
+    shadow-softness="1"
+    dpr="1.25">
   </model-viewer>
 
   <script>
     const mv = document.getElementById('mv');
 
-    // 1) Материал: почти белый, с лёгким холодным оттенком + металл
-    //    (если у модели несколько материалов — применим ко всем PBR)
+    // Slight bluish metallic finish (more diffuse than before)
     mv.addEventListener('load', () => {
       const materials = mv.model?.materials || [];
       for (const mat of materials) {
         const pbr = mat.pbrMetallicRoughness;
         if (!pbr) continue;
-        // Едва заметный голубой: почти [1,1,1], но с лёгким усилением B
-        // sRGB (R,G,B,A) в диапазоне 0..1
-        pbr.setBaseColorFactor([0.96, 0.98, 1.00, 1.0]);
+        // Almost white with a hint of blue; slightly higher roughness
+        pbr.setBaseColorFactor([0.97, 0.985, 1.0, 1.0]);
         pbr.setMetallicFactor(1.0);
-        pbr.setRoughnessFactor(0.15); // 0.10..0.20 — глянцевый металл без «зеркала»
+        pbr.setRoughnessFactor(0.22); // a touch more diffuse
       }
     });
 
-    // 2) Плавное следование камеры за курсором (критически демпфированная пружина)
+    // Cursor-follow: camera orbits toward the pointer (no grabbing)
     (function(){
-      const yawRange   = Math.PI / 6;   // ~30° по горизонту
-      const pitchRange = Math.PI / 12;  // ~15° по вертикали
-      const zoomFactor = 0.85;          // крупный, но не «в лоб»
-      const k = 24, c = 9;              // мягче для «silky smooth»
+      const yawRange   = Math.PI / 6;    // horizontal range (~30°)
+      const pitchRange = Math.PI / 12;   // vertical range (~15°)
+      const zoomFactor = 0.85;           // close, but not too tight
+      // Critically damped spring — silky motion without overshoot
+      const k = 24, c = 9;
 
       function parseOrbit(str){
         const parts = String(str).trim().split(/\s+/);
@@ -62,10 +66,10 @@
           const v = parseFloat(m[1]), u = m[2].toLowerCase();
           return u==='deg' ? v*Math.PI/180 : v;
         };
-        return { theta:num(parts[0]), phi:num(parts[1]), radius:num(parts[2]) };
+        return { theta: num(parts[0]), phi: num(parts[1]), radius: num(parts[2]) };
       }
       const fmt  = (t,p,r)=>`${t}rad ${p}rad ${r}m`;
-      const soft = x => Math.tanh(x); // мягкое насыщение по краям
+      const soft = x => Math.tanh(x); // soft clamp at edges
 
       let base={theta:0,phi:0,radius:1.2},
           offs={yaw:0,pitch:0},
@@ -81,32 +85,26 @@
         offs.pitch = -soft(ny) * pitchRange;
       }
 
-      // Desktop + touch
-      mv.addEventListener('pointermove', e => onPointer(e.clientX, e.clientY), {passive:true});
-      mv.addEventListener('pointerleave', () => { offs.yaw=0; offs.pitch=0; }, {passive:true});
+      // No grab required; just move cursor and camera follows
+      mv.addEventListener('pointermove', e => onPointer(e.clientX, e.clientY), { passive: true });
+      mv.addEventListener('pointerleave', () => { offs.yaw = 0; offs.pitch = 0; }, { passive: true });
       mv.addEventListener('touchmove', e => {
         const t = e.touches[0]; if (t) onPointer(t.clientX, t.clientY);
-      }, {passive:true});
+      }, { passive: true });
 
       function tick(now){
-        const dt = Math.min(0.05, (now - last)/1000); // защита от больших шагов
-        last = now;
-
-        // Пружина: cur'' + c*cur' + k*(cur - offs) = 0
+        const dt = Math.min(0.05, (now - last)/1000); last = now;
         const ay = -k*(cur.yaw   - offs.yaw)   - c*vel.yaw;
         const ap = -k*(cur.pitch - offs.pitch) - c*vel.pitch;
         vel.yaw   += ay * dt; cur.yaw   += vel.yaw   * dt;
         vel.pitch += ap * dt; cur.pitch += vel.pitch * dt;
-
         mv.cameraOrbit = fmt(base.theta + cur.yaw, base.phi + cur.pitch, base.radius);
         requestAnimationFrame(tick);
       }
 
-      mv.addEventListener('load', ()=>{
+      mv.addEventListener('load', () => {
         const o = parseOrbit(mv.cameraOrbit || '0rad 0rad 1.2m');
-        base.theta  = o.theta;
-        base.phi    = o.phi;
-        base.radius = o.radius * zoomFactor;
+        base.theta = o.theta; base.phi = o.phi; base.radius = o.radius * zoomFactor;
         mv.cameraOrbit = fmt(base.theta, base.phi, base.radius);
         last = performance.now();
         requestAnimationFrame(tick);
