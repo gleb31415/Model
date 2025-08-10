@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Metallic Model</title>
+  <title>Metallic Model — Fullscreen</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
     html, body {
@@ -11,12 +11,14 @@
       padding: 0;
       height: 100%;
       width: 100%;
-      background: transparent;
+      background: #ffffff; /* обычный белый фон страницы */
     }
     model-viewer {
       width: 100%;
       height: 100%;
-      background: transparent;
+      display: block;
+      background: transparent; /* без подложек/эффектов */
+      touch-action: none;       /* чтобы тач не скроллил страницу при повороте */
     }
   </style>
 </head>
@@ -31,24 +33,27 @@
   <script>
     const mv = document.getElementById('mv');
 
-    // Принудительно красим в алюминиево-серебристо-голубой
+    // 1) Материал: почти белый, с лёгким холодным оттенком + металл
+    //    (если у модели несколько материалов — применим ко всем PBR)
     mv.addEventListener('load', () => {
       const materials = mv.model?.materials || [];
-      materials.forEach(mat => {
-        if (mat.pbrMetallicRoughness) {
-          mat.pbrMetallicRoughness.setBaseColorFactor([0.7, 0.8, 0.95, 1]); // RGB + alpha
-          mat.pbrMetallicRoughness.setMetallicFactor(1.0);
-          mat.pbrMetallicRoughness.setRoughnessFactor(0.15);
-        }
-      });
+      for (const mat of materials) {
+        const pbr = mat.pbrMetallicRoughness;
+        if (!pbr) continue;
+        // Едва заметный голубой: почти [1,1,1], но с лёгким усилением B
+        // sRGB (R,G,B,A) в диапазоне 0..1
+        pbr.setBaseColorFactor([0.96, 0.98, 1.00, 1.0]);
+        pbr.setMetallicFactor(1.0);
+        pbr.setRoughnessFactor(0.15); // 0.10..0.20 — глянцевый металл без «зеркала»
+      }
     });
 
-    // Плавное вращение за курсором
+    // 2) Плавное следование камеры за курсором (критически демпфированная пружина)
     (function(){
-      const yawRange   = Math.PI/6;
-      const pitchRange = Math.PI/12;
-      const zoomFactor = 0.85;
-      const k = 28, c = 10;
+      const yawRange   = Math.PI / 6;   // ~30° по горизонту
+      const pitchRange = Math.PI / 12;  // ~15° по вертикали
+      const zoomFactor = 0.85;          // крупный, но не «в лоб»
+      const k = 24, c = 9;              // мягче для «silky smooth»
 
       function parseOrbit(str){
         const parts = String(str).trim().split(/\s+/);
@@ -59,38 +64,51 @@
         };
         return { theta:num(parts[0]), phi:num(parts[1]), radius:num(parts[2]) };
       }
-      const fmt = (t,p,r)=>`${t}rad ${p}rad ${r}m`;
-      const soft = x => Math.tanh(x);
+      const fmt  = (t,p,r)=>`${t}rad ${p}rad ${r}m`;
+      const soft = x => Math.tanh(x); // мягкое насыщение по краям
 
-      let base={theta:0,phi:0,radius:1.2}, offs={yaw:0,pitch:0}, cur={yaw:0,pitch:0}, vel={yaw:0,pitch:0};
-      let last=performance.now();
+      let base={theta:0,phi:0,radius:1.2},
+          offs={yaw:0,pitch:0},
+          cur ={yaw:0,pitch:0},
+          vel ={yaw:0,pitch:0};
+      let last = performance.now();
 
       function onPointer(x,y){
         const r = mv.getBoundingClientRect();
-        const nx = (x - (r.left + r.width/2)) / (r.width/2);
-        const ny = (y - (r.top  + r.height/2)) / (r.height/2);
+        const nx = (x - (r.left + r.width/2)) / (r.width/2);   // -1..1
+        const ny = (y - (r.top  + r.height/2)) / (r.height/2); // -1..1
         offs.yaw   = soft(nx) * yawRange;
         offs.pitch = -soft(ny) * pitchRange;
       }
-      mv.addEventListener('pointermove',e=>onPointer(e.clientX,e.clientY),{passive:true});
-      mv.addEventListener('pointerleave',()=>{offs.yaw=0;offs.pitch=0;},{passive:true});
-      mv.addEventListener('touchmove',e=>{const t=e.touches[0]; if(t) onPointer(t.clientX,t.clientY);},{passive:true});
+
+      // Desktop + touch
+      mv.addEventListener('pointermove', e => onPointer(e.clientX, e.clientY), {passive:true});
+      mv.addEventListener('pointerleave', () => { offs.yaw=0; offs.pitch=0; }, {passive:true});
+      mv.addEventListener('touchmove', e => {
+        const t = e.touches[0]; if (t) onPointer(t.clientX, t.clientY);
+      }, {passive:true});
 
       function tick(now){
-        const dt = Math.min(0.05,(now-last)/1000); last=now;
+        const dt = Math.min(0.05, (now - last)/1000); // защита от больших шагов
+        last = now;
+
+        // Пружина: cur'' + c*cur' + k*(cur - offs) = 0
         const ay = -k*(cur.yaw   - offs.yaw)   - c*vel.yaw;
         const ap = -k*(cur.pitch - offs.pitch) - c*vel.pitch;
-        vel.yaw   += ay*dt; cur.yaw   += vel.yaw*dt;
-        vel.pitch += ap*dt; cur.pitch += vel.pitch*dt;
-        mv.cameraOrbit = fmt(base.theta+cur.yaw, base.phi+cur.pitch, base.radius);
+        vel.yaw   += ay * dt; cur.yaw   += vel.yaw   * dt;
+        vel.pitch += ap * dt; cur.pitch += vel.pitch * dt;
+
+        mv.cameraOrbit = fmt(base.theta + cur.yaw, base.phi + cur.pitch, base.radius);
         requestAnimationFrame(tick);
       }
 
       mv.addEventListener('load', ()=>{
         const o = parseOrbit(mv.cameraOrbit || '0rad 0rad 1.2m');
-        base.theta=o.theta; base.phi=o.phi; base.radius=o.radius*zoomFactor;
+        base.theta  = o.theta;
+        base.phi    = o.phi;
+        base.radius = o.radius * zoomFactor;
         mv.cameraOrbit = fmt(base.theta, base.phi, base.radius);
-        last=performance.now();
+        last = performance.now();
         requestAnimationFrame(tick);
       });
     })();
