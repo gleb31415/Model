@@ -3,113 +3,134 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Model — Cursor Follow</title>
+  <title>Model Demo</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
-    html, body {
-      margin: 0; padding: 0;
-      height: 100%; width: 100%;
-      background: #ffffff; /* plain page background */
-    }
-    model-viewer {
-      width: 100%;
-      height: 100%;
-      display: block;
-      background: transparent;  /* no skybox/backdrop */
-      touch-action: none;       /* avoid page scroll on touch move */
-    }
+    html, body { height:100%; margin:0; }
+    #wrap { height:100vh; width:100vw; background: transparent; }
+    model-viewer { width:100%; height:100%; display:block; background: transparent; }
   </style>
 </head>
 <body>
-  <model-viewer id="mv"
-    src="./models/solution-logo.glb"
-    camera-controls="false"   <!-- no grab/drag -->
-    disable-zoom
-    interaction-policy="none"
-    environment-image="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr"
-    environment-intensity="0.9"  <!-- a bit softer lighting -->
-    exposure="1.0"
-    tone-mapping="aces"
-    shadow-intensity="0.25"
-    shadow-softness="1"
-    dpr="1.25">
-  </model-viewer>
+  <div id="wrap">
+    <model-viewer id="mv"
+      src="./models/solution-logo.glb"
+      camera-controls="false"
+      disable-zoom
+      interaction-policy="none"
+      style="background:transparent;">
+    </model-viewer>
+  </div>
 
   <script>
-    const mv = document.getElementById('mv');
-
-    // Slight bluish metallic finish (more diffuse than before)
-    mv.addEventListener('load', () => {
-      const materials = mv.model?.materials || [];
-      for (const mat of materials) {
-        const pbr = mat.pbrMetallicRoughness;
-        if (!pbr) continue;
-        // Almost white with a hint of blue; slightly higher roughness
-        pbr.setBaseColorFactor([0.97, 0.985, 1.0, 1.0]);
-        pbr.setMetallicFactor(1.0);
-        pbr.setRoughnessFactor(0.22); // a touch more diffuse
-      }
-    });
-
-    // Cursor-follow: camera orbits toward the pointer (no grabbing)
+    // Плавное следование камеры за курсором:
+    // - стартуем ровно из исходной орбиты GLB
+    // - фиксированный крупный зум (radius)
+    // - критически демпфированный «пружинный» апдейтер по времени (dt)
+  
     (function(){
-      const yawRange   = Math.PI / 6;    // horizontal range (~30°)
-      const pitchRange = Math.PI / 12;   // vertical range (~15°)
-      const zoomFactor = 0.85;           // close, but not too tight
-      // Critically damped spring — silky motion without overshoot
-      const k = 24, c = 9;
-
+      const mv = document.getElementById('mv');
+  
+      // ----------------- настройки поведения -----------------
+      const yawRange   = Math.PI / 6;   // максимальный поворот по горизонту (~30°)
+      const pitchRange = Math.PI / 12;  // максимальный поворот по вертикали (~15°)
+      const zoomFactor = 0.8;           // 0.8 = чуть ближе к модели (крупнее)
+      // Параметры «пружины»: k — жёсткость, c — демпфирование (примерно критическое)
+      const k = 28;   // можно 24..36
+      const c = 10;   // можно 8..12
+      // -------------------------------------------------------
+  
+      // Парсер cameraOrbit вида "45deg 30deg 1.2m" или "0.7rad 0.2rad 1.3m"
       function parseOrbit(str){
         const parts = String(str).trim().split(/\s+/);
-        const num = p => {
-          const m = p.match(/^(-?\d+(?:\.\d+)?)(deg|rad|m)$/i);
-          const v = parseFloat(m[1]), u = m[2].toLowerCase();
-          return u==='deg' ? v*Math.PI/180 : v;
-        };
-        return { theta: num(parts[0]), phi: num(parts[1]), radius: num(parts[2]) };
+        const vals = parts.map(p=>{
+          const m = p.match(/^(-?\d+(\.\d+)?)(deg|rad|m)$/i);
+          if(!m) return null;
+          const value = parseFloat(m[1]);
+          const unit  = m[3].toLowerCase();
+          if(unit === 'deg') return value * Math.PI/180;
+          if(unit === 'rad') return value;
+          if(unit === 'm')   return value; // радиус в метрах
+          return null;
+        });
+        // theta(rad), phi(rad), radius(m)
+        return { theta: vals[0]||0, phi: vals[1]||0, radius: vals[2]||1.2 };
       }
-      const fmt  = (t,p,r)=>`${t}rad ${p}rad ${r}m`;
-      const soft = x => Math.tanh(x); // soft clamp at edges
-
-      let base={theta:0,phi:0,radius:1.2},
-          offs={yaw:0,pitch:0},
-          cur ={yaw:0,pitch:0},
-          vel ={yaw:0,pitch:0};
-      let last = performance.now();
-
-      function onPointer(x,y){
+  
+      function formatOrbit(theta, phi, radius){
+        return `${theta}rad ${phi}rad ${radius}m`;
+      }
+  
+      // Мягкое ограничение при выходе курсора к краям (без «дёрганий»)
+      function softClamp01(x){ // -> -1..1 с «мягкими» краями
+        // tanh даёт плавный выход к насыщению
+        return Math.tanh(x);
+      }
+  
+      // Состояние
+      let base = { theta: 0, phi: 0, radius: 1.2 }; // берём из GLB
+      let offs = { yaw: 0, pitch: 0 };              // целевые оффсеты от курсора
+      let cur  = { yaw: 0, pitch: 0 };              // текущие оффсеты
+      let vel  = { yaw: 0, pitch: 0 };              // скорости для пружины
+      let lastT = performance.now();
+  
+      function onPointer(x, y){
         const r = mv.getBoundingClientRect();
         const nx = (x - (r.left + r.width/2)) / (r.width/2);   // -1..1
         const ny = (y - (r.top  + r.height/2)) / (r.height/2); // -1..1
-        offs.yaw   = soft(nx) * yawRange;
-        offs.pitch = -soft(ny) * pitchRange;
+        // «Мягкие» края
+        const sx = softClamp01(nx);
+        const sy = softClamp01(ny);
+        offs.yaw   = sx * yawRange;
+        offs.pitch = -sy * pitchRange;
       }
-
-      // No grab required; just move cursor and camera follows
-      mv.addEventListener('pointermove', e => onPointer(e.clientX, e.clientY), { passive: true });
-      mv.addEventListener('pointerleave', () => { offs.yaw = 0; offs.pitch = 0; }, { passive: true });
-      mv.addEventListener('touchmove', e => {
+  
+      mv.addEventListener('pointermove', e=>onPointer(e.clientX, e.clientY), {passive:true});
+      mv.addEventListener('pointerleave', ()=>{ offs.yaw = 0; offs.pitch = 0; }, {passive:true});
+      mv.addEventListener('touchmove', e=>{
         const t = e.touches[0]; if (t) onPointer(t.clientX, t.clientY);
-      }, { passive: true });
-
+      }, {passive:true});
+  
       function tick(now){
-        const dt = Math.min(0.05, (now - last)/1000); last = now;
+        const dt = Math.min(0.05, (now - lastT) / 1000); // сек, с лимитом 50мс
+        lastT = now;
+  
+        // Пружина: cur'' + c*cur' + k*(cur - offs) = 0
+        // численно интегрируем как скорость/позицию
+        // yaw
         const ay = -k*(cur.yaw   - offs.yaw)   - c*vel.yaw;
+        vel.yaw   += ay * dt;
+        cur.yaw   += vel.yaw * dt;
+        // pitch
         const ap = -k*(cur.pitch - offs.pitch) - c*vel.pitch;
-        vel.yaw   += ay * dt; cur.yaw   += vel.yaw   * dt;
-        vel.pitch += ap * dt; cur.pitch += vel.pitch * dt;
-        mv.cameraOrbit = fmt(base.theta + cur.yaw, base.phi + cur.pitch, base.radius);
+        vel.pitch += ap * dt;
+        cur.pitch += vel.pitch * dt;
+  
+        // Применяем как базовый угол + оффсет
+        const theta = base.theta + cur.yaw;
+        const phi   = base.phi   + cur.pitch;
+        const radius= base.radius;
+  
+        mv.cameraOrbit = formatOrbit(theta, phi, radius);
+  
         requestAnimationFrame(tick);
       }
-
-      mv.addEventListener('load', () => {
+  
+      // Инициализация строго из исходной орбиты GLB,
+      // а не из нулей: модель стартует «как в исходнике».
+      mv.addEventListener('load', ()=>{
+        // Текущая (исходная) орбита, поставленная самим <model-viewer>
         const o = parseOrbit(mv.cameraOrbit || '0rad 0rad 1.2m');
-        base.theta = o.theta; base.phi = o.phi; base.radius = o.radius * zoomFactor;
-        mv.cameraOrbit = fmt(base.theta, base.phi, base.radius);
-        last = performance.now();
+        base.theta  = o.theta;
+        base.phi    = o.phi;
+        base.radius = o.radius * zoomFactor; // делаем чуть крупнее
+        mv.cameraOrbit = formatOrbit(base.theta, base.phi, base.radius);
+  
+        lastT = performance.now();
         requestAnimationFrame(tick);
       });
     })();
   </script>
+  
 </body>
 </html>
