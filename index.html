@@ -6,63 +6,42 @@
   <title>Model Demo</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
-    html, body { height:100%; margin:0; background:#ffffff; } /* нормальный фон страницы */
-    .wrap{
-      min-height:100vh;
-      display:grid;
-      place-items:center;
-      padding:32px;
-      box-sizing:border-box;
-      background:#f5f7fa; /* мягкая светло-серая подложка */
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #fff;
     }
-    .stage{
-      width:min(520px, 80vw);   /* размер виджета (можно менять) */
-      aspect-ratio:1/1;
-      border-radius:20px;
-      overflow:hidden;
-      box-shadow:0 10px 40px rgba(0,0,0,.08);
-      background:#eaf4ff;       /* неброский голубоватый фон области модели */
+    .wrap {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
     }
-    model-viewer{
-      width:100%;
-      height:100%;
-      display:block;
-      background:transparent;   /* фон самой сцены — прозрачный, видна .stage */
+    model-viewer {
+      width: 400px;
+      height: 400px;
+      background: transparent;
     }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="stage">
-      <model-viewer id="mv"
-        src="./models/solution-logo.glb"
-        camera-controls="false"
-        disable-zoom
-        interaction-policy="none"
-
-        /* студийное освещение и «нормальный» фон через HDR */
-        environment-image="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr"
-        skybox-image="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr"
-        environment-intensity="1.2"
-        exposure="1.1"
-        tone-mapping="aces"
-
-        shadow-intensity="0.35"
-        shadow-softness="1"
-        dpr="1.25"
-      ></model-viewer>
-    </div>
+    <model-viewer id="mv"
+      src="./models/solution-logo.glb"
+      camera-controls="false"
+      disable-zoom
+      interaction-policy="none">
+    </model-viewer>
   </div>
 
   <script>
-    // Плавное следование камеры за курсором: старт из исходной позы GLB
     (function(){
       const mv = document.getElementById('mv');
 
-      const yawRange   = Math.PI/6;    // ~30° по горизонту
-      const pitchRange = Math.PI/12;   // ~15° по вертикали
-      const zoomFactor = 0.85;         // кадр чуть крупнее исходного
-      const k = 28, c = 10;            // «пружина»/демпфирование
+      const yawRange   = Math.PI/6;
+      const pitchRange = Math.PI/12;
+      const zoomFactor = 0.85;
+      const k = 28, c = 10;
 
       function parseOrbit(str){
         const parts = String(str).trim().split(/\s+/);
