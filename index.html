@@ -6,30 +6,28 @@
   <title>Model Demo</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
-    html,body { height:100%; margin:0; background:#ffffff; }
-    /* Холст страницы */
-    .wrap {
+    html, body { height:100%; margin:0; background:#ffffff; } /* нормальный фон страницы */
+    .wrap{
       min-height:100vh;
       display:grid;
       place-items:center;
       padding:32px;
       box-sizing:border-box;
-      background:#ffffff; /* или transparent, если нужно сквозь сайт */
+      background:#f5f7fa; /* мягкая светло-серая подложка */
     }
-    /* Размер виджета (уменьшенный) */
-    .stage {
-      width: min(520px, 80vw);      /* ← меняйте ширину здесь */
-      aspect-ratio: 1 / 1;          /* квадрат; можно 16/9 и т.п. */
-      border-radius: 20px;
-      overflow: hidden;
-      box-shadow: 0 10px 40px rgba(0,0,0,.08);
-      background: #eaf4ff;          /* нежно-голубая подложка */
+    .stage{
+      width:min(520px, 80vw);   /* размер виджета (можно менять) */
+      aspect-ratio:1/1;
+      border-radius:20px;
+      overflow:hidden;
+      box-shadow:0 10px 40px rgba(0,0,0,.08);
+      background:#eaf4ff;       /* неброский голубоватый фон области модели */
     }
-    model-viewer {
+    model-viewer{
       width:100%;
       height:100%;
       display:block;
-      background: transparent;      /* прозрачный фон внутри */
+      background:transparent;   /* фон самой сцены — прозрачный, видна .stage */
     }
   </style>
 </head>
@@ -42,55 +40,29 @@
         disable-zoom
         interaction-policy="none"
 
+        /* студийное освещение и «нормальный» фон через HDR */
         environment-image="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr"
         skybox-image="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr"
-        environment-intensity="1.25"
+        environment-intensity="1.2"
         exposure="1.1"
         tone-mapping="aces"
 
         shadow-intensity="0.35"
         shadow-softness="1"
         dpr="1.25"
-      >
-      </model-viewer>
+      ></model-viewer>
     </div>
   </div>
 
   <script>
-    // --- Настройка материалов: «голубоватый металл» и аккуратная шероховатость ---
-    (function(){
-      const mv = document.getElementById('mv');
-      mv.addEventListener('load', async () => {
-        const scene = mv.model;
-        if (!scene || !scene.materials) return;
-
-        // Цвет (sRGB 0..1): мягкий холодный голубой
-        const BLUE = [0.68, 0.82, 0.97, 1.0]; // #add2f7 примерно
-
-        for (const mat of scene.materials) {
-          if (mat.pbrMetallicRoughness) {
-            try {
-              // Цвет базы
-              if (mat.pbrMetallicRoughness.baseColorFactor) {
-                mat.pbrMetallicRoughness.setBaseColorFactor(BLUE);
-              }
-              // Металл и шероховатость (меньше — глаже отражения)
-              mat.pbrMetallicRoughness.setMetallicFactor(0.9);
-              mat.pbrMetallicRoughness.setRoughnessFactor(0.22);
-            } catch (_) {}
-          }
-        }
-      });
-    })();
-
-    // --- Плавное следование (улучшенная пружина + старт из исходной позы) ---
+    // Плавное следование камеры за курсором: старт из исходной позы GLB
     (function(){
       const mv = document.getElementById('mv');
 
-      const yawRange   = Math.PI / 7;   // ~26°
-      const pitchRange = Math.PI / 12;  // ~15°
-      const zoomFactor = 0.85;          // чуть крупнее исходного
-      const k = 26, c = 9;              // пружина/демпфирование
+      const yawRange   = Math.PI/6;    // ~30° по горизонту
+      const pitchRange = Math.PI/12;   // ~15° по вертикали
+      const zoomFactor = 0.85;         // кадр чуть крупнее исходного
+      const k = 28, c = 10;            // «пружина»/демпфирование
 
       function parseOrbit(str){
         const parts = String(str).trim().split(/\s+/);
@@ -99,7 +71,7 @@
           const v = parseFloat(m[1]), u = m[2].toLowerCase();
           return u==='deg' ? v*Math.PI/180 : v;
         };
-        return { theta: num(parts[0]), phi: num(parts[1]), radius: num(parts[2]) };
+        return { theta:num(parts[0]), phi:num(parts[1]), radius:num(parts[2]) };
       }
       const fmt = (t,p,r)=>`${t}rad ${p}rad ${r}m`;
       const soft = x => Math.tanh(x);
@@ -116,7 +88,7 @@
       }
       mv.addEventListener('pointermove',e=>onPointer(e.clientX,e.clientY),{passive:true});
       mv.addEventListener('pointerleave',()=>{offs.yaw=0;offs.pitch=0;},{passive:true});
-      mv.addEventListener('touchmove',e=>{const t=e.touches[0]; if(t) onPointer(t.clientX,t.clientY)}, {passive:true});
+      mv.addEventListener('touchmove',e=>{const t=e.touches[0]; if(t) onPointer(t.clientX,t.clientY);},{passive:true});
 
       function tick(now){
         const dt = Math.min(0.05,(now-last)/1000); last=now;
@@ -124,7 +96,6 @@
         const ap = -k*(cur.pitch - offs.pitch) - c*vel.pitch;
         vel.yaw   += ay*dt; cur.yaw   += vel.yaw*dt;
         vel.pitch += ap*dt; cur.pitch += vel.pitch*dt;
-
         mv.cameraOrbit = fmt(base.theta+cur.yaw, base.phi+cur.pitch, base.radius);
         requestAnimationFrame(tick);
       }
