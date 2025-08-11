@@ -28,12 +28,11 @@
     disable-pan
     interaction-policy="none"
 
-    environment-image="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr"
-    environment-intensity="0.85"
+    environment-image="neutral"
+    environment-intensity="1.0"
     exposure="1.0"
     tone-mapping="aces"
-    shadow-intensity="0.2"
-    shadow-softness="1"
+    shadow-intensity="0"
     dpr="1.25">
   </model-viewer>
 
@@ -47,7 +46,17 @@
         if (!pbr) continue;
         pbr.setBaseColorFactor([0.98, 0.99, 1.00, 1.0]); // почти белый с лёгким синим
         pbr.setMetallicFactor(0.25);
-        pbr.setRoughnessFactor(0.25);
+        pbr.setRoughnessFactor(0.2);
+      }
+
+      // Свет из точки камеры
+      const scene = mv.scene;
+      if (scene) {
+        const light = document.createElement('directional-light');
+        light.setAttribute('intensity', '1.2');
+        light.setAttribute('color', '#CAE0FAFF');
+        light.setAttribute('direction', '0 0 -1'); // прямо в объект
+        scene.appendChild(light);
       }
     });
 
