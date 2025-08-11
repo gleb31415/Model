@@ -40,7 +40,7 @@
         const pbr = mat.pbrMetallicRoughness;
         if (!pbr) continue;
         // чуть более голубой оттенок
-        pbr.setBaseColorFactor([0.94, 0.97, 1.0, 1.0]);
+        pbr.setBaseColorFactor([0.815, 0.854, 0.835, 1.0]);
         pbr.setMetallicFactor(0.35);
         pbr.setRoughnessFactor(0.22);
       }
@@ -49,7 +49,7 @@
     (function(){
       const yawRange   = Math.PI / 6;
       const pitchRange = Math.PI / 12;
-      const zoomFactor = 1.5; // ↑ больше значение — камера дальше → модель меньше
+      const zoomFactor = 2.5; // ↑ больше значение — камера дальше → модель меньше
       const k = 28, c = 10;
 
       function parseOrbit(str){
