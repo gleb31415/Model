@@ -27,7 +27,7 @@
     shadow-intensity="0"
     dpr="1.25">
     <!-- холодный фронтальный и лёгкий контровый свет, без теней -->
-    <directional-light color="#EAF3FF" intensity="1.0" direction="0 0 -1"></directional-light>
+    <directional-light color="#C2D9F6FF" intensity="0.8" direction="0 0 -1"></directional-light>
     <directional-light color="#D6E6FF" intensity="0.6" direction="-0.3 0.1 0.6"></directional-light>
   </model-viewer>
 
@@ -50,7 +50,7 @@
     (function(){
       const yawRange   = Math.PI / 6;     // ~30°
       const pitchRange = Math.PI / 12;    // ~15°
-      const zoomFactor = 0.95;            // ближе к модели (чуть больше в кадре)
+      const zoomFactor = 0.5;            // ближе к модели (чуть больше в кадре)
       const k = 28, c = 10;               // пружина/демпфирование
 
       function parseOrbit(str){
