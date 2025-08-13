@@ -19,11 +19,11 @@
     camera-controls
     environment-image="neutral"
     environment-intensity="1.25"
-    exposure="1.15"
+    exposure="1.8"
     tone-mapping="aces"
     shadow-intensity="0"
     dpr="1.25"
-    field-of-view="60deg"         <!-- wider FOV to help big assets fit -->
+    field-of-view="80deg"         <!-- wider FOV to help big assets fit -->
     min-field-of-view="40deg"
     max-field-of-view="85deg">
     <!-- cool sky + neutral ground; adds white/blue lift to metals -->
@@ -43,9 +43,8 @@
         const pbr = mat.pbrMetallicRoughness; if (!pbr) continue;
         // slightly cool white tint
         pbr.setBaseColorFactor([0.93, 0.97, 1.00, 1.0]);
-        // metallic aluminum with soft sheen
-        pbr.setMetallicFactor(0.5);
-        pbr.setRoughnessFactor(0.3); // higher roughness = less gray mirror, softer highlights
+        pbr.setMetallicFactor(0.3);
+        pbr.setRoughnessFactor(0.5); // higher roughness = less gray mirror, softer highlights
       }
     });
 
