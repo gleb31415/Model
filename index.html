@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Model — Cursor Follow (Cool Light)</title>
+  <title>Model — Cool White/Blue Aluminum</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
     html, body { margin:0; padding:0; height:100%; width:100%; background:#ffffff00; }
@@ -17,46 +17,46 @@
   <model-viewer id="mv"
     src="./models/solution-logo.glb"
     camera-controls
+    camera-target="auto"
+    bounds="tight"
     environment-image="neutral"
-    environment-intensity="1.25"
-    exposure="1.8"
+    environment-intensity="2.0"
+    exposure="1.45"
     tone-mapping="aces"
     shadow-intensity="0"
     dpr="1.25"
-    field-of-view="80deg"         <!-- wider FOV to help big assets fit -->
+    field-of-view="65deg"
     min-field-of-view="40deg"
-    max-field-of-view="85deg">
-    <!-- cool sky + neutral ground; adds white/blue lift to metals -->
-    <hemisphere-light sky-color="#bcd6ff" ground-color="#f5f7fb" intensity="0.7"></hemisphere-light>
-    <!-- key + rim (cooler) -->
-    <directional-light color="#e9f2ff" intensity="1.0" direction="0.5 0.6 -0.9"></directional-light>
-    <directional-light color="#a8caff" intensity="0.6" direction="-0.6 0.3 0.8"></directional-light>
+    max-field-of-view="90deg">
+    <!-- Свет: холодная шапка + яркий ключ + яркий рим, чтобы блестело -->
+    <hemisphere-light sky-color="#cfe1ff" ground-color="#ffffff" intensity="1.1"></hemisphere-light>
+    <directional-light color="#f2f7ff" intensity="1.25" direction="0.55 0.65 -0.8"></directional-light>
+    <directional-light color="#b7d0ff" intensity="1.0" direction="-0.7 0.25 0.9"></directional-light>
   </model-viewer>
 
   <script>
     const mv = document.getElementById('mv');
 
-    // --- Make materials look like cool white/blue aluminum ---
+    // Материал: белый с лёгким голубым, более глянцевый алюминий
     mv.addEventListener('load', () => {
       const mats = mv.model?.materials || [];
       for (const mat of mats) {
         const pbr = mat.pbrMetallicRoughness; if (!pbr) continue;
-        // slightly cool white tint
-        pbr.setBaseColorFactor([0.93, 0.97, 1.00, 1.0]);
-        pbr.setMetallicFactor(0.3);
-        pbr.setRoughnessFactor(0.5); // higher roughness = less gray mirror, softer highlights
+        pbr.setBaseColorFactor([0.95, 0.98, 1.00, 1.0]); // холодный белый
+        pbr.setMetallicFactor(1.0);                      // максимум металличности
+        pbr.setRoughnessFactor(0.25);                    // более резкие блики
       }
     });
 
-    // --- Camera framing + your cursor-follow rig ---
+    // Жёсткое кадрирование: отодвигаем камеру так, чтобы ВСЯ модель поместилась
     (function(){
       const yawRange   = Math.PI / 6;
       const pitchRange = Math.PI / 12;
       const k = 28, c = 10;
-      const soft = x => Math.tanh(x);
       const fmt = (t,p,r)=>`${t}rad ${p}rad ${r}m`;
+      const soft = x => Math.tanh(x);
 
-      let base = { theta:0, phi:0, radius:1.0 };
+      let base = { theta:0, phi:0, radius:2.0 };
       let offs = { yaw:0, pitch:0 };
       let cur  = { yaw:0, pitch:0 };
       let vel  = { yaw:0, pitch:0 };
@@ -69,7 +69,6 @@
         offs.yaw   =  soft(nx) * yawRange;
         offs.pitch = -soft(ny) * pitchRange;
       }
-
       mv.addEventListener('pointermove', e => onPointer(e.clientX, e.clientY), { passive:true });
       mv.addEventListener('pointerleave', () => { offs.yaw=0; offs.pitch=0; }, { passive:true });
       mv.addEventListener('touchmove', e => { const t = e.touches[0]; if (t) onPointer(t.clientX, t.clientY); }, { passive:true });
@@ -84,28 +83,31 @@
         requestAnimationFrame(tick);
       }
 
-      // Frame the model to the viewport using its actual size and current FOV
-      function frameToView(padding=1.15) {
-        // getDimensions() returns {x,y,z} in meters (model-viewer API)
+      // Вычисление дистанции по реальным габаритам + FOV
+      function computeDistance(padding=1.25) {
         const dim = mv.getDimensions?.();
-        if (!dim) return; // fallback if not available
-        const fovDeg = parseFloat(String(mv.fieldOfView || '60deg').replace(/[^\d.]/g,''));
-        const fov = fovDeg * Math.PI / 180;
-        const maxDim = Math.max(dim.x, dim.y, dim.z);
+        if (!dim) return 3.0; // запасной вариант
 
-        // Fit by height for a conservative frame.
-        const distByHeight = (dim.y / 2) / Math.tan(fov / 2);
-        // Also ensure width fits given current aspect.
+        // Радиус описанной сферы (м)
+        const r = 0.5 * Math.hypot(dim.x, dim.y, dim.z);
+
+        // Вертикальный FOV (рад)
+        const fovDeg = parseFloat(String(mv.fieldOfView || '65deg').replace(/[^\d.]/g,''));
+        const fov = fovDeg * Math.PI / 180;
+
+        // Для сферы: d >= r / tan(FOV/2)
+        const dByHeight = r / Math.tan(Math.max(0.2, fov/2));
+
+        // Проверим ширину (учёт аспекта)
         const aspect = mv.clientWidth / Math.max(1, mv.clientHeight);
         const fovH = 2 * Math.atan(Math.tan(fov/2) * aspect);
-        const distByWidth = (dim.x / 2) / Math.tan(Math.max(0.1, fovH) / 2);
+        const dByWidth = r / Math.tan(Math.max(0.2, fovH/2));
 
-        const dist = Math.max(distByHeight, distByWidth, maxDim); // guard for very flat models
-        return dist * padding;
+        return Math.max(dByHeight, dByWidth) * padding;
       }
 
       mv.addEventListener('load', ()=>{
-        // Start from whatever orbit is set (center is automatic)
+        // Читаем текущий orbit
         const parts = String(mv.cameraOrbit || '0rad 0rad 1m').trim().split(/\s+/);
         const parse = (p)=> {
           const m = String(p).match(/^(-?\d+(?:\.\d+)?)(deg|rad|m)$/i);
@@ -115,15 +117,22 @@
         };
         base.theta  = parse(parts[0]);
         base.phi    = parse(parts[1]);
-        const framed = frameToView(1.18) || 2.0; // fallback distance if API missing
-        base.radius = framed;
+
+        // Жёстко отодвигаем:
+        const dist = computeDistance(1.35); // больше число => дальше камера
+        base.radius = dist;
 
         mv.cameraOrbit = fmt(base.theta, base.phi, base.radius);
-        mv.jumpCameraToGoal?.(); // make sure it snaps to the computed goal
+        mv.jumpCameraToGoal?.();
+
+        // Дополнительно осветлим (если всё ещё темно — поднимите значения ниже)
+        mv.environmentIntensity = 2.2;
+        mv.exposure = 1.6;
+
         lastT = performance.now();
         requestAnimationFrame(tick);
       });
     })();
   </script>
 </body>
-</html>
+</html> 
