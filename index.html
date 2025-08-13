@@ -9,9 +9,7 @@
     html, body { margin:0; padding:0; height:100%; width:100%; background:#ffffff00; }
     model-viewer {
       width:100%; height:100%; display:block; background:transparent;
-      /* keep pointer events for your custom cursor-follow; wheel zoom is unaffected */
-      touch-action:none; 
-      cursor:default;
+      touch-action:none; cursor:default;
     }
   </style>
 </head>
@@ -20,51 +18,46 @@
     src="./models/solution-logo.glb"
     camera-controls
     environment-image="neutral"
-    environment-intensity="0.9"
-    exposure="1.0"
+    environment-intensity="1.25"
+    exposure="1.15"
     tone-mapping="aces"
     shadow-intensity="0"
-    dpr="1.25">
-    <directional-light color="#A4CCFA" intensity="0.85" direction="0 0 -1"></directional-light>
+    dpr="1.25"
+    field-of-view="60deg"         <!-- wider FOV to help big assets fit -->
+    min-field-of-view="40deg"
+    max-field-of-view="85deg">
+    <!-- cool sky + neutral ground; adds white/blue lift to metals -->
+    <hemisphere-light sky-color="#bcd6ff" ground-color="#f5f7fb" intensity="0.7"></hemisphere-light>
+    <!-- key + rim (cooler) -->
+    <directional-light color="#e9f2ff" intensity="1.0" direction="0.5 0.6 -0.9"></directional-light>
+    <directional-light color="#a8caff" intensity="0.6" direction="-0.6 0.3 0.8"></directional-light>
   </model-viewer>
 
   <script>
     const mv = document.getElementById('mv');
 
+    // --- Make materials look like cool white/blue aluminum ---
     mv.addEventListener('load', () => {
       const mats = mv.model?.materials || [];
       for (const mat of mats) {
-        const pbr = mat.pbrMetallicRoughness;
-        if (!pbr) continue;
-        pbr.setBaseColorFactor([0.89, 0.96, 1, 1.0]);
-        pbr.setMetallicFactor(0.7);
-        pbr.setRoughnessFactor(0.3);
+        const pbr = mat.pbrMetallicRoughness; if (!pbr) continue;
+        // slightly cool white tint
+        pbr.setBaseColorFactor([0.93, 0.97, 1.00, 1.0]);
+        // metallic aluminum with soft sheen
+        pbr.setMetallicFactor(0.9);
+        pbr.setRoughnessFactor(0.55); // higher roughness = less gray mirror, softer highlights
       }
     });
 
+    // --- Camera framing + your cursor-follow rig ---
     (function(){
       const yawRange   = Math.PI / 6;
       const pitchRange = Math.PI / 12;
-      const zoomFactor = 1.8; // >1 pushes the camera farther away
       const k = 28, c = 10;
-
-      function parseOrbit(str){
-        const parts = String(str).trim().split(/\s+/);
-        const vals = parts.map(p=>{
-          const m = p.match(/^(-?\d+(?:\.\d+)?)(deg|rad|m)$/i);
-          if(!m) return null;
-          const v = parseFloat(m[1]), u = m[2].toLowerCase();
-          if(u==='deg') return v*Math.PI/180;
-          if(u==='rad') return v;
-          if(u==='m')   return v;
-          return null;
-        });
-        return { theta: vals[0]||0, phi: vals[1]||0, radius: vals[2]||1.2 };
-      }
-      const fmt = (t,p,r)=>`${t}rad ${p}rad ${r}m`;
       const soft = x => Math.tanh(x);
+      const fmt = (t,p,r)=>`${t}rad ${p}rad ${r}m`;
 
-      let base = { theta:0, phi:0, radius:1.2 };
+      let base = { theta:0, phi:0, radius:1.0 };
       let offs = { yaw:0, pitch:0 };
       let cur  = { yaw:0, pitch:0 };
       let vel  = { yaw:0, pitch:0 };
@@ -80,9 +73,7 @@
 
       mv.addEventListener('pointermove', e => onPointer(e.clientX, e.clientY), { passive:true });
       mv.addEventListener('pointerleave', () => { offs.yaw=0; offs.pitch=0; }, { passive:true });
-      mv.addEventListener('touchmove', e => {
-        const t = e.touches[0]; if (t) onPointer(t.clientX, t.clientY);
-      }, { passive:true });
+      mv.addEventListener('touchmove', e => { const t = e.touches[0]; if (t) onPointer(t.clientX, t.clientY); }, { passive:true });
 
       function tick(now){
         const dt = Math.min(0.05, (now - lastT)/1000); lastT = now;
@@ -94,12 +85,42 @@
         requestAnimationFrame(tick);
       }
 
+      // Frame the model to the viewport using its actual size and current FOV
+      function frameToView(padding=1.15) {
+        // getDimensions() returns {x,y,z} in meters (model-viewer API)
+        const dim = mv.getDimensions?.();
+        if (!dim) return; // fallback if not available
+        const fovDeg = parseFloat(String(mv.fieldOfView || '60deg').replace(/[^\d.]/g,''));
+        const fov = fovDeg * Math.PI / 180;
+        const maxDim = Math.max(dim.x, dim.y, dim.z);
+
+        // Fit by height for a conservative frame.
+        const distByHeight = (dim.y / 2) / Math.tan(fov / 2);
+        // Also ensure width fits given current aspect.
+        const aspect = mv.clientWidth / Math.max(1, mv.clientHeight);
+        const fovH = 2 * Math.atan(Math.tan(fov/2) * aspect);
+        const distByWidth = (dim.x / 2) / Math.tan(Math.max(0.1, fovH) / 2);
+
+        const dist = Math.max(distByHeight, distByWidth, maxDim); // guard for very flat models
+        return dist * padding;
+      }
+
       mv.addEventListener('load', ()=>{
-        const o = parseOrbit(mv.cameraOrbit || '0rad 0rad 1.2m');
-        base.theta  = o.theta;
-        base.phi    = o.phi;
-        base.radius = o.radius * zoomFactor; // farther away
+        // Start from whatever orbit is set (center is automatic)
+        const parts = String(mv.cameraOrbit || '0rad 0rad 1m').trim().split(/\s+/);
+        const parse = (p)=> {
+          const m = String(p).match(/^(-?\d+(?:\.\d+)?)(deg|rad|m)$/i);
+          if(!m) return 0;
+          const v = parseFloat(m[1]), u = m[2].toLowerCase();
+          return u==='deg' ? v*Math.PI/180 : v;
+        };
+        base.theta  = parse(parts[0]);
+        base.phi    = parse(parts[1]);
+        const framed = frameToView(1.18) || 2.0; // fallback distance if API missing
+        base.radius = framed;
+
         mv.cameraOrbit = fmt(base.theta, base.phi, base.radius);
+        mv.jumpCameraToGoal?.(); // make sure it snaps to the computed goal
         lastT = performance.now();
         requestAnimationFrame(tick);
       });
