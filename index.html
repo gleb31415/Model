@@ -28,7 +28,6 @@
     dpr="1.25">
     <!-- холодный фронтальный и лёгкий контровый свет -->
     <directional-light color="#A4CCFA" intensity="0.85" direction="0 0 -1"></directional-light>
-    <directional-light color="#94B8F0" intensity="0.65" direction="-0.3 0.1 0.6"></directional-light>
   </model-viewer>
 
   <script>
@@ -41,8 +40,8 @@
         if (!pbr) continue;
         // чуть более голубой оттенок
         pbr.setBaseColorFactor([0.89, 0.96, 1, 1.0]);
-        pbr.setMetallicFactor(0.6);
-        pbr.setRoughnessFactor(0.80);
+        pbr.setMetallicFactor(0.7);
+        pbr.setRoughnessFactor(0.3);
       }
     });
 
