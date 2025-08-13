@@ -3,94 +3,118 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Model — Cursor Follow (Cool Light)</title>
+  <title>Model — 70% Screen, Cursor Follow</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
-    html, body { margin:0; padding:0; height:100%; width:100%; background:#ffffff00; }
+    html, body {
+      margin: 0; padding: 0;
+      height: 100%; width: 100%;
+      background: #ffffff;
+    }
     model-viewer {
-      width:100%; height:100%; display:block; background:transparent;
-      /* keep pointer events for your custom cursor-follow; wheel zoom is unaffected */
-      touch-action:none; 
-      cursor:default;
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: transparent;
+      touch-action: none;
+      cursor: default; /* обычный курсор */
     }
   </style>
 </head>
 <body>
   <model-viewer id="mv"
     src="./models/solution-logo.glb"
-    camera-controls
+    camera-controls="false"
+    disable-zoom
+    disable-pan
+    interaction-policy="none"
+
     environment-image="neutral"
-    environment-intensity="0.9"
+    environment-intensity="1.0"
     exposure="1.0"
     tone-mapping="aces"
     shadow-intensity="0"
     dpr="1.25">
-    <directional-light color="#A4CCFA" intensity="0.85" direction="0 0 -1"></directional-light>
   </model-viewer>
 
   <script>
     const mv = document.getElementById('mv');
 
+    // Меняем цвет на более синий металлический
     mv.addEventListener('load', () => {
       const mats = mv.model?.materials || [];
       for (const mat of mats) {
         const pbr = mat.pbrMetallicRoughness;
         if (!pbr) continue;
-        pbr.setBaseColorFactor([0.89, 0.96, 1, 1.0]);
-        pbr.setMetallicFactor(0.7);
-        pbr.setRoughnessFactor(0.3);
+        // Холодный голубовато-белый
+        pbr.setBaseColorFactor([0.9, 0.94, 1.0, 1.0]);
+        pbr.setMetallicFactor(0.6);
+        pbr.setRoughnessFactor(0.25);
       }
     });
 
     (function(){
       const yawRange   = Math.PI / 6;
       const pitchRange = Math.PI / 12;
-      const zoomFactor = 1.8; // >1 pushes the camera farther away
-      const k = 28, c = 10;
+      const zoomFactor = 1.2;
+      const k = 28;
+      const c = 10;
 
       function parseOrbit(str){
         const parts = String(str).trim().split(/\s+/);
         const vals = parts.map(p=>{
-          const m = p.match(/^(-?\d+(?:\.\d+)?)(deg|rad|m)$/i);
+          const m = p.match(/^(-?\d+(\.\d+)?)(deg|rad|m)$/i);
           if(!m) return null;
-          const v = parseFloat(m[1]), u = m[2].toLowerCase();
-          if(u==='deg') return v*Math.PI/180;
-          if(u==='rad') return v;
-          if(u==='m')   return v;
+          const value = parseFloat(m[1]);
+          const unit  = m[3].toLowerCase();
+          if(unit === 'deg') return value * Math.PI/180;
+          if(unit === 'rad') return value;
+          if(unit === 'm')   return value;
           return null;
         });
         return { theta: vals[0]||0, phi: vals[1]||0, radius: vals[2]||1.2 };
       }
-      const fmt = (t,p,r)=>`${t}rad ${p}rad ${r}m`;
-      const soft = x => Math.tanh(x);
 
-      let base = { theta:0, phi:0, radius:1.2 };
-      let offs = { yaw:0, pitch:0 };
-      let cur  = { yaw:0, pitch:0 };
-      let vel  = { yaw:0, pitch:0 };
+      function formatOrbit(theta, phi, radius){
+        return `${theta}rad ${phi}rad ${radius}m`;
+      }
+
+      function softClamp01(x){ return Math.tanh(x); }
+
+      let base = { theta: 0, phi: 0, radius: 1.2 };
+      let offs = { yaw: 0, pitch: 0 };
+      let cur  = { yaw: 0, pitch: 0 };
+      let vel  = { yaw: 0, pitch: 0 };
       let lastT = performance.now();
 
       function onPointer(x, y){
         const r = mv.getBoundingClientRect();
         const nx = (x - (r.left + r.width/2)) / (r.width/2);
         const ny = (y - (r.top  + r.height/2)) / (r.height/2);
-        offs.yaw   =  soft(nx) * yawRange;
-        offs.pitch = -soft(ny) * pitchRange;
+        offs.yaw   = softClamp01(nx) * yawRange;
+        offs.pitch = -softClamp01(ny) * pitchRange;
       }
 
-      mv.addEventListener('pointermove', e => onPointer(e.clientX, e.clientY), { passive:true });
-      mv.addEventListener('pointerleave', () => { offs.yaw=0; offs.pitch=0; }, { passive:true });
-      mv.addEventListener('touchmove', e => {
+      mv.addEventListener('pointermove', e=>onPointer(e.clientX, e.clientY), {passive:true});
+      mv.addEventListener('pointerleave', ()=>{ offs.yaw = 0; offs.pitch = 0; }, {passive:true});
+      mv.addEventListener('touchmove', e=>{
         const t = e.touches[0]; if (t) onPointer(t.clientX, t.clientY);
-      }, { passive:true });
+      }, {passive:true});
 
       function tick(now){
-        const dt = Math.min(0.05, (now - lastT)/1000); lastT = now;
+        const dt = Math.min(0.05, (now - lastT) / 1000);
+        lastT = now;
+
         const ay = -k*(cur.yaw   - offs.yaw)   - c*vel.yaw;
+        vel.yaw   += ay * dt;
+        cur.yaw   += vel.yaw * dt;
+
         const ap = -k*(cur.pitch - offs.pitch) - c*vel.pitch;
-        vel.yaw   += ay * dt; cur.yaw   += vel.yaw   * dt;
-        vel.pitch += ap * dt; cur.pitch += vel.pitch * dt;
-        mv.cameraOrbit = fmt(base.theta + cur.yaw, base.phi + cur.pitch, base.radius);
+        vel.pitch += ap * dt;
+        cur.pitch += vel.pitch * dt;
+
+        mv.cameraOrbit = formatOrbit(base.theta + cur.yaw, base.phi + cur.pitch, base.radius);
+
         requestAnimationFrame(tick);
       }
 
@@ -98,8 +122,9 @@
         const o = parseOrbit(mv.cameraOrbit || '0rad 0rad 1.2m');
         base.theta  = o.theta;
         base.phi    = o.phi;
-        base.radius = o.radius * zoomFactor; // farther away
-        mv.cameraOrbit = fmt(base.theta, base.phi, base.radius);
+        base.radius = o.radius * zoomFactor;
+        mv.cameraOrbit = formatOrbit(base.theta, base.phi, base.radius);
+
         lastT = performance.now();
         requestAnimationFrame(tick);
       });
