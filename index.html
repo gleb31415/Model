@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Model — Cool White/Blue Aluminum</title>
+  <title>Model — Cool White/Blue Matte</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
     html, body { margin:0; padding:0; height:100%; width:100%; background:#ffffff00; }
@@ -20,35 +20,48 @@
     camera-target="auto"
     bounds="tight"
     environment-image="neutral"
-    environment-intensity="2.0"
-    exposure="1.45"
+    environment-intensity="1.6"
+    exposure="1.55"
     tone-mapping="aces"
     shadow-intensity="0"
     dpr="1.25"
-    field-of-view="65deg"
+    field-of-view="68deg"
     min-field-of-view="40deg"
     max-field-of-view="90deg">
-    <!-- Свет: холодная шапка + яркий ключ + яркий рим, чтобы блестело -->
-    <hemisphere-light sky-color="#cfe1ff" ground-color="#ffffff" intensity="1.1"></hemisphere-light>
-    <directional-light color="#f2f7ff" intensity="1.25" direction="0.55 0.65 -0.8"></directional-light>
-    <directional-light color="#b7d0ff" intensity="1.0" direction="-0.7 0.25 0.9"></directional-light>
+
+    <!-- Мягкое общее освещение (легко «выбеляет» материал) -->
+    <hemisphere-light sky-color="#dbe8ff" ground-color="#ffffff" intensity="1.25"></hemisphere-light>
+
+    <!-- Мягкий центральный белый спот: центр светлее -->
+    <spot-light color="#ffffff" intensity="1.6"
+                position="0 0 3"
+                direction="0 0 -1"
+                inner-cone-angle="28deg"
+                outer-cone-angle="72deg"></spot-light>
+
+    <!-- Голубые рим-лайты с двух сторон: синий контур по краям -->
+    <directional-light color="#b8d2ff" intensity="1.0" direction="-0.9 0.1 -0.2"></directional-light>
+    <directional-light color="#b8d2ff" intensity="1.0" direction="0.9 0.1 -0.2"></directional-light>
+
+    <!-- Лёгкий холодный бэк-рим, подчёркивает край сверху -->
+    <directional-light color="#a9c9ff" intensity="0.6" direction="0.0 0.6 0.9"></directional-light>
   </model-viewer>
 
   <script>
     const mv = document.getElementById('mv');
 
-    // Материал: белый с лёгким голубым, более глянцевый алюминий
+    // Материал: белый с лёгким голубым, менее металлический и менее блестящий
     mv.addEventListener('load', () => {
       const mats = mv.model?.materials || [];
       for (const mat of mats) {
         const pbr = mat.pbrMetallicRoughness; if (!pbr) continue;
-        pbr.setBaseColorFactor([0.95, 0.98, 1.00, 1.0]); // холодный белый
-        pbr.setMetallicFactor(1.0);                      // максимум металличности
-        pbr.setRoughnessFactor(0.25);                    // более резкие блики
+        pbr.setBaseColorFactor([0.98, 0.99, 1.00, 1.0]); // очень светлый бело-голубой
+        pbr.setMetallicFactor(0.18);                     // почти неметалл (как на фото)
+        pbr.setRoughnessFactor(0.70);                    // матовый, без резких бликов
       }
     });
 
-    // Жёсткое кадрирование: отодвигаем камеру так, чтобы ВСЯ модель поместилась
+    // Автокадрирование + лёгкое приближение (чтобы "чуть меньше экрана")
     (function(){
       const yawRange   = Math.PI / 6;
       const pitchRange = Math.PI / 12;
@@ -83,22 +96,18 @@
         requestAnimationFrame(tick);
       }
 
-      // Вычисление дистанции по реальным габаритам + FOV
-      function computeDistance(padding=1.25) {
+      function computeDistance(padding=1.12) {
         const dim = mv.getDimensions?.();
-        if (!dim) return 3.0; // запасной вариант
+        if (!dim) return 3.0;
 
-        // Радиус описанной сферы (м)
+        // Описанная сфера для безопасного кадрирования
         const r = 0.5 * Math.hypot(dim.x, dim.y, dim.z);
 
-        // Вертикальный FOV (рад)
-        const fovDeg = parseFloat(String(mv.fieldOfView || '65deg').replace(/[^\d.]/g,''));
+        // Вертикальный FOV
+        const fovDeg = parseFloat(String(mv.fieldOfView || '68deg').replace(/[^\d.]/g,''));
         const fov = fovDeg * Math.PI / 180;
 
-        // Для сферы: d >= r / tan(FOV/2)
         const dByHeight = r / Math.tan(Math.max(0.2, fov/2));
-
-        // Проверим ширину (учёт аспекта)
         const aspect = mv.clientWidth / Math.max(1, mv.clientHeight);
         const fovH = 2 * Math.atan(Math.tan(fov/2) * aspect);
         const dByWidth = r / Math.tan(Math.max(0.2, fovH/2));
@@ -107,7 +116,6 @@
       }
 
       mv.addEventListener('load', ()=>{
-        // Читаем текущий orbit
         const parts = String(mv.cameraOrbit || '0rad 0rad 1m').trim().split(/\s+/);
         const parse = (p)=> {
           const m = String(p).match(/^(-?\d+(?:\.\d+)?)(deg|rad|m)$/i);
@@ -118,15 +126,16 @@
         base.theta  = parse(parts[0]);
         base.phi    = parse(parts[1]);
 
-        // Жёстко отодвигаем:
-        const dist = computeDistance(1.35); // больше число => дальше камера
-        base.radius = dist;
+        // Базовая дистанция, чтобы точно влезало…
+        const distFit = computeDistance(1.10);
+        // …и чуть ближе (~8%), но всё ещё меньше экрана
+        base.radius = distFit * 0.92;
 
         mv.cameraOrbit = fmt(base.theta, base.phi, base.radius);
         mv.jumpCameraToGoal?.();
 
-        // Дополнительно осветлим (если всё ещё темно — поднимите значения ниже)
-        mv.environmentIntensity = 2.2;
+        // Чуть ярче, если фон серый или сцена «съедает» свет
+        mv.environmentIntensity = 1.8;
         mv.exposure = 1.6;
 
         lastT = performance.now();
