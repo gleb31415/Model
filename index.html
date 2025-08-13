@@ -41,15 +41,15 @@
         if (!pbr) continue;
         // чуть более голубой оттенок
         pbr.setBaseColorFactor([0.89, 0.96, 1, 1.0]);
-        pbr.setMetallicFactor(0.8);
-        pbr.setRoughnessFactor(0.22);
+        pbr.setMetallicFactor(0.6);
+        pbr.setRoughnessFactor(0.80);
       }
     });
 
     (function(){
       const yawRange   = Math.PI / 6;
       const pitchRange = Math.PI / 12;
-      const zoomFactor = 2.5; // ↑ больше значение — камера дальше → модель меньше
+      const zoomFactor = 5; // ↑ больше значение — камера дальше → модель меньше
       const k = 28, c = 10;
 
       function parseOrbit(str){
