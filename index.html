@@ -9,24 +9,22 @@
     html, body { margin:0; padding:0; height:100%; width:100%; background:#ffffff00; }
     model-viewer {
       width:100%; height:100%; display:block; background:transparent;
-      touch-action:none; cursor:default;
+      /* keep pointer events for your custom cursor-follow; wheel zoom is unaffected */
+      touch-action:none; 
+      cursor:default;
     }
   </style>
 </head>
 <body>
   <model-viewer id="mv"
     src="./models/solution-logo.glb"
-    camera-controls="false"
-    disable-zoom
-    disable-pan
-    interaction-policy="none"
+    camera-controls
     environment-image="neutral"
     environment-intensity="0.9"
     exposure="1.0"
     tone-mapping="aces"
     shadow-intensity="0"
     dpr="1.25">
-    <!-- холодный фронтальный и лёгкий контровый свет -->
     <directional-light color="#A4CCFA" intensity="0.85" direction="0 0 -1"></directional-light>
   </model-viewer>
 
@@ -38,7 +36,6 @@
       for (const mat of mats) {
         const pbr = mat.pbrMetallicRoughness;
         if (!pbr) continue;
-        // чуть более голубой оттенок
         pbr.setBaseColorFactor([0.89, 0.96, 1, 1.0]);
         pbr.setMetallicFactor(0.7);
         pbr.setRoughnessFactor(0.3);
@@ -48,7 +45,7 @@
     (function(){
       const yawRange   = Math.PI / 6;
       const pitchRange = Math.PI / 12;
-      const zoomFactor = 0.3; // ↑ больше значение — камера дальше → модель меньше
+      const zoomFactor = 1.8; // >1 pushes the camera farther away
       const k = 28, c = 10;
 
       function parseOrbit(str){
@@ -101,7 +98,7 @@
         const o = parseOrbit(mv.cameraOrbit || '0rad 0rad 1.2m');
         base.theta  = o.theta;
         base.phi    = o.phi;
-        base.radius = o.radius * zoomFactor;
+        base.radius = o.radius * zoomFactor; // farther away
         mv.cameraOrbit = fmt(base.theta, base.phi, base.radius);
         lastT = performance.now();
         requestAnimationFrame(tick);
