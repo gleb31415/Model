@@ -3,33 +3,29 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Model — Fullscreen Mouse-Follow (Framed Like Reference)</title>
+  <title>Model — Fullscreen Mouse-Follow (Neutral IBL)</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
-    /* Полностью прозрачный фон страницы */
     html, body {
       height: 100%;
       margin: 0;
-      background: transparent !important;
+      background: transparent !important;  /* полностью прозрачная страница */
     }
-    /* Единственный элемент — без обёрток и без каких-либо теней */
     model-viewer {
       position: fixed;
-      inset: 0;                 /* на весь экран */
+      inset: 0;                             /* на весь экран */
       width: 100vw;
       height: 100vh;
       display: block;
-      background: transparent !important;
+      background: transparent !important;   /* прозрачный холст */
       box-shadow: none !important;
-      filter: none !important;
       border: none !important;
       outline: none !important;
       touch-action: none;
       cursor: default;
-      /* иногда браузерные стили рисуют «полосы» — обнулим */
       -webkit-tap-highlight-color: transparent;
     }
-    /* скрываем внутренние служебные элементы, чтобы не казалось, что есть «вертикальный див» */
+    /* скрываем служебные элементы, чтобы не было «вертикального дива»/тени */
     model-viewer::part(poster),
     model-viewer::part(progress-bar),
     model-viewer::part(default-progress-bar),
@@ -43,35 +39,51 @@
 </head>
 <body>
   <model-viewer id="mv"
-    src="./models/solution-logo.glb"
-    bounds="tight"
-    camera-target="auto"
-    interaction-policy="none"
-    disable-zoom
-    environment-image="neutral"
-    environment-intensity="2.0"
-    exposure="1.45"
-    tone-mapping="aces"
-    shadow-intensity="0"
-    dpr="1.25"
-    field-of-view="65deg"
-    style="--poster-color: transparent;">
-    <!-- мягкий равномерный верх/низ, без направленных теней -->
-    <hemisphere-light sky-color="#cfe1ff" ground-color="#ffffff" intensity="1.1"></hemisphere-light>
+        src="./models/model.glb"
+        bounds="tight"
+        camera-target="auto"
+        disable-zoom
+        interaction-policy="none"
+
+        environment-image="neutral"
+        environment-intensity="2.0"
+        exposure="1.10"
+        tone-mapping="aces"
+
+        shadow-intensity="0"
+        shadow-softness="1"
+        dpr="1.25"
+        style="--poster-color: transparent;">
   </model-viewer>
 
   <script>
     const mv = document.getElementById('mv');
 
-    // НЕ меняем ориентацию модели: используем ту, что «нормально стоит» в вашем референсе
-    // Материалы НЕ трогаем, чтобы не сломать ваш цвет. (Если нужно — вернём настройку PBR отдельно.)
+    /* Материал: #8FFF9C, alpha=1.0, metallic=1.0, roughness=0.3.
+       Если в glTF есть карты, не перетираем их. */
+    function applyPBR() {
+      const mats = mv.model?.materials || [];
+      for (const mat of mats) {
+        const pbr = mat.pbrMetallicRoughness; if (!pbr) continue;
+        const hasBaseMap = !!pbr.baseColorTexture;
+        const hasMRMap   = !!pbr.metallicRoughnessTexture;
+        pbr.setBaseColorFactor([143/255, 255/255, 156/255, 1.0]); // #8FFF9C
+        pbr.setMetallicFactor(1.00);
+          pbr.setRoughnessFactor(0.30);
+      }
+    }
+
+    /* Стартовая ориентация модели (как в вашем примере) */
+    const INIT_PITCH = 0;    // ~17.2°
+    const INIT_YAW   = -0;   // ~32.1°
+    const FIXED_ROLL = -3.1415; // ~-180°
 
     (function(){
-      // Диапазоны следования за мышью (деликатно)
-      const yawRange   = Math.PI / 6;   // ~30°
-      const pitchRange = Math.PI / 12;  // ~15°
-      const k = 28, c = 10;             // критическое демпфирование
-      const fmt = (t,p,r)=>`${t}rad ${p}rad ${r}m`;
+      /* Плавное следование камеры */
+      const yawRange   = Math.PI / 10;
+      const pitchRange = Math.PI / 16;
+      const k = 28, c = 10;
+      const fmt  = (t,p,r)=>`${t}rad ${p}rad ${r}m`;
       const soft = x => Math.tanh(x);
 
       let base = { theta:0, phi:0, radius:1.0 };
@@ -87,13 +99,9 @@
         offs.yaw   =  soft(nx) * yawRange;
         offs.pitch = -soft(ny) * pitchRange;
       }
-
       mv.addEventListener('pointermove', e => onPointer(e.clientX, e.clientY), { passive:true });
       mv.addEventListener('pointerleave', () => { offs.yaw=0; offs.pitch=0; }, { passive:true });
-      mv.addEventListener('touchmove', e => {
-        const t = e.touches[0];
-        if (t) onPointer(t.clientX, t.clientY);
-      }, { passive:true });
+      mv.addEventListener('touchmove', e => { const t = e.touches[0]; if (t) onPointer(t.clientX, t.clientY); }, { passive:true });
 
       function tick(now){
         const dt = Math.min(0.05, (now - lastT)/1000); lastT = now;
@@ -105,24 +113,27 @@
         requestAnimationFrame(tick);
       }
 
-      // Подгон расстояния под реальные габариты и FOV (как в вашем «нормально стоит»)
-      function computeDistance(padding=1.12) {
+      /* Дистанция до модели с учётом вертикального и горизонтального FOV */
+      function computeDistance(padding=1.14) {
         const dim = mv.getDimensions?.();
-        if (!dim) return 1.2; // фоллбэк
-        const r = 0.5 * Math.hypot(dim.x, dim.y, dim.z);               // сфера, описывающая модель
+        if (!dim) return 1.4; // фоллбэк
+        const r = 0.5 * Math.hypot(dim.x, dim.y, dim.z);
         const fovDeg = parseFloat(String(mv.fieldOfView || '65deg').replace(/[^\d.]/g,''));
         const fov = fovDeg * Math.PI / 180;
         const dByHeight = r / Math.tan(Math.max(0.2, fov/2));
-
         const aspect = mv.clientWidth / Math.max(1, mv.clientHeight);
         const fovH = 2 * Math.atan(Math.tan(fov/2) * aspect);
         const dByWidth = r / Math.tan(Math.max(0.2, fovH/2));
-
-        return Math.max(dByHeight, dByWidth) * padding;
+        return Math.max(dByHeight, dByWidth) * padding; // padding > 1 даёт зазор
       }
 
       mv.addEventListener('load', () => {
-        // Читаем текущий orbit как «референсную позу» (не трогаем ориентацию модели)
+        applyPBR();
+
+        /* 1) Фиксируем стартовую ориентацию самой модели */
+        mv.orientation = `${INIT_PITCH}rad ${INIT_YAW}rad ${FIXED_ROLL}rad`;
+
+        /* 2) Базовые углы орбиты камеры читаем из текущего состояния */
         const parts = String(mv.cameraOrbit || '0rad 0rad 2m').trim().split(/\s+/);
         const parse = (p)=> {
           const m = String(p).match(/^(-?\d+(?:\.\d+)?)(deg|rad|m)$/i);
@@ -133,11 +144,11 @@
         base.theta = parse(parts[0]);
         base.phi   = parse(parts[1]);
 
-        // Ставим дистанцию «как в референсе», но немного ближе, сохраняя целиком в кадре
-        const fit  = computeDistance(1.10); // 1.10 — чуткий зазор
-        base.radius = Math.max(0.15, fit * 0.95);
+        /* 3) Автокадрирование: камера немного дальше, чтобы модель гарантированно целиком помещалась */
+        const fitR = computeDistance(1.18);         // небольшой запас
+        base.radius = Math.max(0.15, fitR);
 
-        // Фиксируем радиус (никакого зума и «дыхания» кадра)
+        /* 4) Фиксируем радиус (без зума и «дыхания» кадра) */
         mv.setAttribute('min-camera-orbit', `auto auto ${base.radius}m`);
         mv.setAttribute('max-camera-orbit', `auto auto ${base.radius}m`);
 
