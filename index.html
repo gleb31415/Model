@@ -73,12 +73,10 @@
     exposure="3.85"
     tone-mapping="aces"
 
-    shadow-intensity="0.8"    <!-- реальная контактная тень -->
-
     <!-- Свет: ровная база + неб/земля + управляемые ключ/рим -->
     <ambient-light intensity="0.70" color="#FFFFFF"></ambient-light>
     <hemisphere-light sky-color="#F5FBFF" ground-color="#00FF73" intensity="1.2"></hemisphere-light>
-    <directional-light id="keyLight" color="#FFFFFF" intensity="2.65" direction="0.6 -0.8 -0.25"></directional-light>
+    <directional-light id="keyLight" color="#FFFFFF" intensity="4.65" direction="0.6 -0.8 -0.25"></directional-light>
     <directional-light id="rimLight" color="#EFFFF6" intensity="6.10" direction="-0.75 0.35 -1.55"></directional-light>
   </model-viewer>
 
@@ -92,7 +90,7 @@
         const pbr = mat.pbrMetallicRoughness; if (!pbr) continue;
 
         // Very light greenish white (#ECFFF4 ≈ 236,255,244)
-        pbr.setBaseColorFactor([215/255, 215/255, 255/255, 1.0]);
+        pbr.setBaseColorFactor([225/255, 225/255, 255/255, 1.0]);
 
         // High metal, modest roughness for pleasing rolloff
         pbr.setMetallicFactor(1.00);
