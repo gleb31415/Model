@@ -41,10 +41,10 @@
       pointer-events: none;
       background:
         radial-gradient(ellipse at center,
-          rgba(16, 40, 24, 0.10) 0%,
-          rgba(16, 40, 24, 0.06) 34%,
-          rgba(16, 40, 24, 0.03) 62%,
-          rgba(16, 40, 24, 0.00) 100%);
+          rgba(255, 255, 255, 0.1) 0%,
+          rgba(255, 255, 255, 0.06) 34%,
+          rgba(255, 255, 255, 0.03) 62%,
+          rgba(255, 255, 255, 0) 100%);
       filter: blur(0.6px);
     }
 
@@ -107,8 +107,8 @@
     }
 
     /* Initial tilt (sexy angle): slight pitch up, leftward yaw, gentle roll */
-    const INIT_PITCH = 0.18;     // ~10.3°
-    const INIT_YAW   = 0.;    // ~-18.3°
+    const INIT_PITCH = 0.08;     // ~10.3°
+    const INIT_YAW   = 0.07;    // ~-18.3°
     const FIXED_ROLL = -3.1415;  // keep consistent if your model faces -Z by default
 
     /* Smooth mouse-follow camera (no user orbiting; target stays centered) */
