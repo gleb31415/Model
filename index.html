@@ -62,7 +62,7 @@
 </head>
 <body>
   <model-viewer id="mv"
-    src="./models/model.glb"
+    src="./model.glb"
     bounds="tight"
     camera-target="auto"
     disable-zoom
@@ -70,14 +70,14 @@
 
     environment-image="neutral"
     environment-intensity="1.4"
-    exposure="2.65"
+    exposure="2.85"
     tone-mapping="aces"
 
-    shadow-intensity="1.7"    <!-- реальная контактная тень -->
+    shadow-intensity="1.6"    <!-- реальная контактная тень -->
 
     <!-- Свет: ровная база + неб/земля + управляемые ключ/рим -->
     <ambient-light intensity="0.70" color="#FFFFFF"></ambient-light>
-    <hemisphere-light sky-color="#F3F8FA" ground-color="#00FF73FF" intensity="0.8"></hemisphere-light>
+    <hemisphere-light sky-color="#F5FBFF" ground-color="#00FF73" intensity="1.2"></hemisphere-light>
     <directional-light id="keyLight" color="#FFFFFF" intensity="2.65" direction="0.6 -0.8 -0.25"></directional-light>
     <directional-light id="rimLight" color="#EFFFF6" intensity="6.10" direction="-0.75 0.35 -1.55"></directional-light>
   </model-viewer>
@@ -92,7 +92,7 @@
         const pbr = mat.pbrMetallicRoughness; if (!pbr) continue;
 
         // Very light greenish white (#ECFFF4 ≈ 236,255,244)
-        pbr.setBaseColorFactor([150/255, 255/255, 150/255, 1.0]);
+        pbr.setBaseColorFactor([215/255, 215/255, 255/255, 1.0]);
 
         // High metal, modest roughness for pleasing rolloff
         pbr.setMetallicFactor(1.00);
@@ -110,7 +110,7 @@
 
     /* Initial tilt (sexy angle): slight pitch up, leftward yaw, gentle roll */
     const INIT_PITCH = 0.18;     // ~10.3°
-    const INIT_YAW   = 0;    // ~-18.3°
+    const INIT_YAW   = 0.;    // ~-18.3°
     const FIXED_ROLL = -3.1415;  // keep consistent if your model faces -Z by default
 
     /* Smooth mouse-follow camera (no user orbiting; target stays centered) */
