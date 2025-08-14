@@ -70,10 +70,10 @@
 
     environment-image="neutral"
     environment-intensity="1.4"
-    exposure="2.85"
+    exposure="3.85"
     tone-mapping="aces"
 
-    shadow-intensity="1.6"    <!-- реальная контактная тень -->
+    shadow-intensity="0.8"    <!-- реальная контактная тень -->
 
     <!-- Свет: ровная база + неб/земля + управляемые ключ/рим -->
     <ambient-light intensity="0.70" color="#FFFFFF"></ambient-light>
@@ -96,7 +96,7 @@
 
         // High metal, modest roughness for pleasing rolloff
         pbr.setMetallicFactor(1.00);
-        pbr.setRoughnessFactor(0.26);
+        pbr.setRoughnessFactor(0.2);
 
         // If the material has clearcoat extension, add a hint of sheen (optional-safe)
         if (mat.clearcoat) {
