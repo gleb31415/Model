@@ -3,120 +3,89 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Model — Centered, White Metal, Ground Shadow, Light Play</title>
+  <title>Model — Satin Titanium, Neutral Studio, Soft Shadow</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      background: transparent !important; /* прозрачный фон страницы */
+    html, body { height: 100%; margin: 0; background: transparent !important; }
+    model-viewer{
+      position: fixed; inset: 0; width: 100vw; height: 100vh; display: block;
+      background: #EAEAE8 !important; box-shadow: none !important; border: none !important; outline: none !important;
+      touch-action: none; cursor: default; -webkit-tap-highlight-color: transparent; --poster-color: transparent;
     }
-
-    /* На весь экран, строго по центру */
-    model-viewer {
-      position: fixed;
-      inset: 0;
-      width: 100vw;
-      height: 100vh;
-      display: block;
-      background: transparent !important;
-      box-shadow: none !important;
-      border: none !important;
-      outline: none !important;
-      touch-action: none;
-      cursor: default;
-      -webkit-tap-highlight-color: transparent;
-      --poster-color: transparent;
-    }
-
-    /* Аккуратный "земной" диск (визуальная опора), не мешает кликам */
-    model-viewer::before {
-      content: "";
-      position: absolute;
-      left: 50%;
-      bottom: 6vh;
-      transform: translateX(-50%) perspective(800px) rotateX(66deg);
-      width: min(72vw, 72vh);
-      height: min(72vw, 72vh);
-      pointer-events: none;
-      background:
-        radial-gradient(ellipse at center,
-          rgba(255, 255, 255, 0.1) 0%,
-          rgba(255, 255, 255, 0.06) 34%,
-          rgba(255, 255, 255, 0.03) 62%,
-          rgba(255, 255, 255, 0) 100%);
-      filter: blur(0.6px);
-    }
-
-    /* Скрываем служебные элементы */
+    /* Hide built-ins */
     model-viewer::part(poster),
     model-viewer::part(progress-bar),
     model-viewer::part(default-progress-bar),
     model-viewer::part(ar-button),
-    model-viewer::part(ar-prompt) {
-      display: none !important;
-      background: transparent !important;
-      box-shadow: none !important;
-    }
+    model-viewer::part(ar-prompt){ display:none !important; background:transparent !important; box-shadow:none !important; }
   </style>
 </head>
 <body>
   <model-viewer id="mv"
-    src="./model.glb"
+    src="./model2.glb"
     bounds="tight"
     camera-target="auto"
+    field-of-view="55deg"
     disable-zoom
     interaction-policy="none"
 
     environment-image="neutral"
-    environment-intensity="1.4"
-    exposure="5.85"
-    tone-mapping="aces"
+    environment-intensity=".9"
+    environment-rotation="25deg"
+    exposure="0.65"
+    tone-mapping="neutral"
 
-    <!-- Свет: ровная база + неб/земля + управляемые ключ/рим -->
-    <ambient-light intensity="0.70" color="#FFFFFF"></ambient-light>
-    <hemisphere-light sky-color="#F5FBFF" ground-color="#00FF73" intensity="1.2"></hemisphere-light>
-    <directional-light id="keyLight" color="#FFFFFF" intensity="4.65" direction="0.6 -0.8 -0.25"></directional-light>
-    <directional-light id="rimLight" color="#EFFFF6" intensity="6.10" direction="-0.75 0.35 -1.55"></directional-light>
+    shadow-intensity="0.35"
+    shadow-softness="0.9"
+  >
+    <!-- Neutral studio lighting: modest, cool-white, no color cast -->
+    <ambient-light intensity="0.58" color="#FFFFFF"></ambient-light>
+    <hemisphere-light sky-color="#E9EEF5" ground-color="#EAEAE8" intensity="0.23"></hemisphere-light>
   </model-viewer>
 
   <script>
     const mv = document.getElementById('mv');
 
-    /* --- White metal with a slight green accent --- */
-    function applyPBR() {
+    /* Satin Titanium PBR: metallic 1.0, medium roughness, slight cool tint */
+    function applyPBR(){
       const mats = mv.model?.materials || [];
-      for (const mat of mats) {
-        const pbr = mat.pbrMetallicRoughness; if (!pbr) continue;
+      for (const mat of mats){
+        const pbr = mat.pbrMetallicRoughness; if(!pbr) continue;
 
-        // Very light greenish white (#ECFFF4 ≈ 236,255,244)
-        pbr.setBaseColorFactor([245/255, 245/255, 255/255, 1.0]);
+        // Cool, desaturated titanium gray (slightly blue)
+        pbr.setBaseColorFactor([0.93, 0.96, 1, 1.0]); // linear-ish factors
 
-        // High metal, modest roughness for pleasing rolloff
-        pbr.setMetallicFactor(1.00);
-        pbr.setRoughnessFactor(0.2);
+        pbr.setMetallicFactor(0.25);
+        pbr.setRoughnessFactor(0.3); // satin, not chrome; stable specular roll-off
 
-        // If the material has clearcoat extension, add a hint of sheen (optional-safe)
-        if (mat.clearcoat) {
-          try {
-            mat.clearcoat.setClearcoatFactor(0.12);
-            mat.clearcoat.setClearcoatRoughnessFactor(0.4);
-          } catch (e) { /* ignore if unsupported */ }
-        }
+        // Optional modern extensions (safe-guarded)
+        try{
+          if (mat.clearcoat){
+            mat.clearcoat.setClearcoatFactor(0.04);           // very thin oxide/coat feel
+            mat.clearcoat.setClearcoatRoughnessFactor(0.35);
+          }
+          if (mat.sheen){
+            mat.sheen.setSheenColorFactor([0.95, 0.97, 1.0]);  // subtle airy edge
+            mat.sheen.setSheenRoughnessFactor(0.4);
+          }
+          if (mat.anisotropy){
+            mat.anisotropy.setAnisotropyStrength(0.6);        // brushed hint (if supported)
+            mat.anisotropy.setAnisotropyDirection([1, 0]);    // world X; adjust if needed
+          }
+          if (mat.specular){
+            mat.specular.setSpecularFactor(1.0);
+            mat.specular.setSpecularColorFactor([1.0, 1.0, 1.0]);
+          }
+        }catch(e){ /* ignore if extension not present */ }
       }
     }
 
-    /* Initial tilt (sexy angle): slight pitch up, leftward yaw, gentle roll */
-    const INIT_PITCH = 0.08;     // ~10.3°
-    const INIT_YAW   = 0.07;    // ~-18.3°
-    const FIXED_ROLL = -3.1415;  // keep consistent if your model faces -Z by default
-
-    /* Smooth mouse-follow camera (no user orbiting; target stays centered) */
+    /* Gentle pointer-follow (premium, restrained motion; no user orbit) */
     (function(){
-      const yawRange   = Math.PI / 11;   // responsiveness horizontally
-      const pitchRange = Math.PI / 16;   // responsiveness vertically
-      const k = 28, c = 10;              // critically damped-ish spring
-      const fmt  = (t,p,r)=>`${t}rad ${p}rad ${r}m`;
+      const yawRange   = Math.PI / 20;  // subtle
+      const pitchRange = Math.PI / 24;  // subtle
+      const k=24, c=10;
+      const fmt = (t,p,r)=>`${t}rad ${p}rad ${r}m`;
       const soft = x => Math.tanh(x);
 
       let base = { theta:0, phi:0, radius:1.0 };
@@ -125,75 +94,60 @@
       let vel  = { yaw:0, pitch:0 };
       let lastT = performance.now();
 
-      function onPointer(x, y){
+      function onPointer(x,y){
         const r = mv.getBoundingClientRect();
         const nx = (x - (r.left + r.width/2)) / (r.width/2);
-        const ny = (y - (r.top  + r.height/2)) / (r.height/2);
-        offs.yaw   =  soft(nx) * yawRange;
-        offs.pitch = -soft(ny) * pitchRange;
+        const ny = - (y - (r.top  + r.height/2)) / (r.height/2);
+        offs.yaw   = soft(nx) * yawRange;
+        offs.pitch = soft(ny) * pitchRange;
       }
+      mv.addEventListener('pointermove', e=>onPointer(e.clientX,e.clientY), {passive:true});
+      mv.addEventListener('pointerleave', ()=>{offs.yaw=0; offs.pitch=0;}, {passive:true});
+      mv.addEventListener('touchmove', e=>{const t=e.touches[0]; if(t) onPointer(t.clientX,t.clientY);},{passive:true});
 
-      mv.addEventListener('pointermove', e => onPointer(e.clientX, e.clientY), { passive:true });
-      mv.addEventListener('pointerleave', () => { offs.yaw=0; offs.pitch=0; }, { passive:true });
-      mv.addEventListener('touchmove', e => { const t = e.touches[0]; if (t) onPointer(t.clientX, t.clientY); }, { passive:true });
-
-      function computeDistance(padding=1.16) {
-        const dim = mv.getDimensions?.();
-        if (!dim) return 1.4;
+      function computeDistance(padding=1.14){
+        const dim = mv.getDimensions?.(); if(!dim) return 1.4;
         const r = 0.5 * Math.hypot(dim.x, dim.y, dim.z);
-        const fovDeg = parseFloat(String(mv.fieldOfView || '65deg').replace(/[^\d.]/g,''));
+        const fovDeg = parseFloat(String(mv.fieldOfView || '55deg').replace(/[^\d.]/g,''));
         const fov = fovDeg * Math.PI / 180;
-        const dByHeight = r / Math.tan(Math.max(0.2, fov/2));
         const aspect = mv.clientWidth / Math.max(1, mv.clientHeight);
         const fovH = 2 * Math.atan(Math.tan(fov/2) * aspect);
-        const dByWidth = r / Math.tan(Math.max(0.2, fovH/2));
-        return Math.max(dByHeight, dByWidth) * padding;
-      }
-
-      /* Gentle animated lighting (“light game”) */
-      function animateLights(timeMs) {
-        const t = timeMs * 0.00035; // slow orbit
-        const key = mv.shadowRoot?.querySelector?.('#keyLight') || document.getElementById('keyLight');
-        const rim = mv.shadowRoot?.querySelector?.('#rimLight') || document.getElementById('rimLight');
-        if (key) key.setAttribute('direction', `${Math.cos(t)*0.75} 0.85 ${-0.25 + Math.sin(t)*0.35}`);
-        if (rim) rim.setAttribute('direction', `${-0.65 + Math.sin(t*0.8)*0.25} 0.35 ${0.55 + Math.cos(t*0.8)*0.25}`);
+        const dByH = r / Math.tan(Math.max(0.2, fov/2));
+        const dByW = r / Math.tan(Math.max(0.2, fovH/2));
+        return Math.max(dByH, dByW) * padding;
       }
 
       function tick(now){
-        const dt = Math.min(0.05, (now - lastT)/1000); lastT = now;
+        const dt = Math.min(0.05, (now - lastT)/1000); lastT=now;
         const ay = -k*(cur.yaw   - offs.yaw)   - c*vel.yaw;
         const ap = -k*(cur.pitch - offs.pitch) - c*vel.pitch;
         vel.yaw   += ay * dt; cur.yaw   += vel.yaw   * dt;
         vel.pitch += ap * dt; cur.pitch += vel.pitch * dt;
-
         mv.cameraOrbit = fmt(base.theta + cur.yaw, base.phi + cur.pitch, base.radius);
-        animateLights(now);
         requestAnimationFrame(tick);
       }
 
       mv.addEventListener('load', () => {
         applyPBR();
 
-        // Model’s own orientation (sexy tilt)
+        // Premium “product” angle: slight pitch-up, light left yaw
+        const INIT_PITCH = 0;  // ~10.3°
+        const INIT_YAW   = -Math.PI/2 * 1.05; // ~-18.3°
+        const FIXED_ROLL = 0;
+
         mv.orientation = `${INIT_PITCH}rad ${INIT_YAW}rad ${FIXED_ROLL}rad`;
 
-        // Base orbit (centered around target)
+        // Fixed distance for rock-solid framing
+        const fitR = computeDistance(1.16);
+        base.radius = Math.max(0.18, fitR);
+
         const parts = String(mv.cameraOrbit || '0rad 0rad 2m').trim().split(/\s+/);
-        const parse = (p)=> {
-          const m = String(p).match(/^(-?\d+(?:\.\d+)?)(deg|rad|m)$/i);
-          if(!m) return 0;
-          const v = parseFloat(m[1]), u = m[2].toLowerCase();
-          return u==='deg' ? v*Math.PI/180 : v;
-        };
+        const parse = (p)=>{ const m = String(p).match(/^(-?\d+(?:\.\d+)?)(deg|rad|m)$/i); if(!m) return 0; const v=+m[1], u=m[2].toLowerCase(); return u==='deg'? v*Math.PI/180 : v; };
         base.theta = parse(parts[0]);
         base.phi   = parse(parts[1]);
 
-        // Lock distance so framing never breathes; keep perfectly centered
-        const fitR = computeDistance(1.18);
-        base.radius = Math.max(0.15, fitR);
         mv.setAttribute('min-camera-orbit', `auto auto ${base.radius}m`);
         mv.setAttribute('max-camera-orbit', `auto auto ${base.radius}m`);
-
         mv.cameraOrbit = fmt(base.theta, base.phi, base.radius);
         mv.jumpCameraToGoal?.();
 
